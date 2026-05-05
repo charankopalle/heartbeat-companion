@@ -6,26 +6,39 @@ import Tracking from "@/screens/Tracking";
 import AlertDetails from "@/screens/AlertDetails";
 import HistoryScreen from "@/screens/History";
 import Profile from "@/screens/Profile";
+import Onboarding from "@/screens/Onboarding";
+import Settings from "@/screens/Settings";
 import PhoneFrame from "@/components/PhoneFrame";
 import BottomNav from "@/components/BottomNav";
+import { useLiveData } from "@/state/LiveDataContext";
+import { isPatientReady } from "@/lib/config";
 
-export type Screen = "dashboard" | "emergency" | "tracking" | "details" | "history" | "profile";
+export type Screen =
+  | "dashboard" | "emergency" | "tracking" | "details"
+  | "history" | "profile" | "settings" | "onboarding";
 
 const Index = () => {
-  const [screen, setScreen] = useState<Screen>("dashboard");
+  const { config, triggerEmergency } = useLiveData();
+  const initial: Screen = isPatientReady(config.patient) ? "dashboard" : "onboarding";
+  const [screen, setScreen] = useState<Screen>(initial);
 
   const renderScreen = () => {
     switch (screen) {
-      case "dashboard": return <Dashboard onTriggerEmergency={() => setScreen("emergency")} onOpenProfile={() => setScreen("profile")} />;
-      case "emergency": return <Emergency onMatched={() => setScreen("tracking")} onCancel={() => setScreen("dashboard")} />;
-      case "tracking": return <Tracking onArrived={() => setScreen("details")} onBack={() => setScreen("dashboard")} />;
-      case "details": return <AlertDetails onDone={() => setScreen("dashboard")} />;
-      case "history": return <HistoryScreen />;
-      case "profile": return <Profile onBack={() => setScreen("dashboard")} />;
+      case "onboarding": return <Onboarding onDone={() => setScreen("dashboard")} />;
+      case "dashboard":  return <Dashboard
+        onTriggerEmergency={() => setScreen("emergency")}
+        onOpenProfile={() => setScreen("profile")}
+        onOpenSettings={() => setScreen("settings")} />;
+      case "emergency":  return <Emergency onMatched={() => setScreen("tracking")} onCancel={() => setScreen("dashboard")} />;
+      case "tracking":   return <Tracking onArrived={() => setScreen("details")} onBack={() => setScreen("dashboard")} />;
+      case "details":    return <AlertDetails onDone={() => setScreen("dashboard")} />;
+      case "history":    return <HistoryScreen />;
+      case "profile":    return <Profile onBack={() => setScreen("dashboard")} onEdit={() => setScreen("onboarding")} />;
+      case "settings":   return <Settings onBack={() => setScreen("dashboard")} />;
     }
   };
 
-  const showNav = screen !== "emergency" && screen !== "tracking";
+  const showNav = !["emergency", "tracking", "onboarding"].includes(screen);
 
   return (
     <main className="min-h-screen w-full gradient-calm flex items-center justify-center p-0 sm:p-6">
@@ -37,13 +50,16 @@ const Index = () => {
         {showNav && (
           <BottomNav
             current={screen}
-            onChange={setScreen}
+            onChange={(s) => {
+              if (s === "emergency") { void triggerEmergency(true); }
+              setScreen(s);
+            }}
             items={[
-              { id: "dashboard", label: "Live", icon: Activity },
-              { id: "history", label: "History", icon: History },
-              { id: "emergency", label: "SOS", icon: AlertTriangle, accent: true },
-              { id: "details", label: "Care", icon: MapPin },
-              { id: "profile", label: "Profile", icon: User },
+              { id: "dashboard", labelKey: "nav.live", icon: Activity },
+              { id: "history",   labelKey: "nav.history", icon: History },
+              { id: "emergency", labelKey: "nav.sos", icon: AlertTriangle, accent: true },
+              { id: "details",   labelKey: "nav.care", icon: MapPin },
+              { id: "profile",   labelKey: "nav.profile", icon: User },
             ]}
           />
         )}

@@ -1,61 +1,45 @@
-import { useEffect, useRef, useState } from "react";
+// Renders a real ECG buffer as a polyline. Auto-scales vertically and
+// shows a flat line + hint when no data is present.
 
-/** Generates a continuous, scrolling ECG waveform via SVG. */
-const ECGWaveform = ({ color = "hsl(var(--ecg))", bpm = 78 }: { color?: string; bpm?: number }) => {
-  const W = 600; // logical width
-  const H = 160;
-  const [offset, setOffset] = useState(0);
-  const raf = useRef<number>();
-  const speed = (bpm / 60) * 60; // px/s
+const ECGWaveform = ({
+  samples,
+  color = "hsl(var(--ecg))",
+  height = 160,
+}: { samples: number[]; color?: string; height?: number }) => {
+  const W = 600;
+  const H = height;
+  const n = samples.length;
 
-  useEffect(() => {
-    let last = performance.now();
-    const tick = (t: number) => {
-      const dt = (t - last) / 1000;
-      last = t;
-      setOffset((o) => (o + dt * speed) % W);
-      raf.current = requestAnimationFrame(tick);
-    };
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current!);
-  }, [speed]);
-
-  // Build one PQRST complex repeated across the width
-  const buildPath = (shift: number) => {
+  let path = `M 0 ${H / 2} L ${W} ${H / 2}`;
+  if (n > 1) {
+    let min = Infinity, max = -Infinity;
+    for (const s of samples) { if (s < min) min = s; if (s > max) max = s; }
+    const range = max - min || 1;
     const pts: string[] = [];
-    const beatWidth = 80;
-    for (let x = -beatWidth; x < W + beatWidth; x += 1) {
-      const phase = ((x + shift) % beatWidth + beatWidth) % beatWidth;
-      let y = H / 2;
-      if (phase < 8) y -= Math.sin((phase / 8) * Math.PI) * 6; // P
-      else if (phase < 18) y += 0;
-      else if (phase < 22) y += 8; // Q
-      else if (phase < 26) y -= 60; // R spike
-      else if (phase < 30) y += 18; // S
-      else if (phase < 50) y -= Math.sin(((phase - 30) / 20) * Math.PI) * 10; // T
-      pts.push(`${x},${y.toFixed(2)}`);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * W;
+      const y = H - ((samples[i] - min) / range) * (H * 0.8) - H * 0.1;
+      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
     }
-    return "M" + pts.join(" L");
-  };
+    path = "M" + pts.join(" L");
+  }
 
   return (
-    <div className="relative w-full h-40 rounded-2xl overflow-hidden bg-primary-soft/40">
+    <div className="relative w-full rounded-2xl overflow-hidden bg-primary-soft/40" style={{ height }}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
         <defs>
-          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <pattern id="ecg-grid" width="20" height="20" patternUnits="userSpaceOnUse">
             <path d="M 20 0 L 0 0 0 20" fill="none" stroke="hsl(var(--ecg-grid))" strokeWidth="0.6" />
           </pattern>
-          <linearGradient id="fade" x1="0" x2="1">
-            <stop offset="0" stopColor={color} stopOpacity="0" />
-            <stop offset="0.15" stopColor={color} stopOpacity="1" />
-            <stop offset="1" stopColor={color} stopOpacity="1" />
-          </linearGradient>
         </defs>
-        <rect width={W} height={H} fill="url(#grid)" />
-        <path d={buildPath(offset)} fill="none" stroke="url(#fade)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <rect width={W} height={H} fill="url(#ecg-grid)" />
+        <path d={path} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      {/* Right edge glow */}
-      <div className="absolute top-0 right-0 h-full w-12 bg-gradient-to-l from-primary-soft/80 to-transparent pointer-events-none" />
+      {n < 2 && (
+        <div className="absolute inset-0 grid place-items-center">
+          <p className="text-xs text-muted-foreground font-medium">No live signal</p>
+        </div>
+      )}
     </div>
   );
 };
